@@ -32,3 +32,6 @@ terraform.tfvars
 .idea/
 .DS_Store
 Thumbs.db
+
+!dbt/seeds/*.csv
+dbt/logs/

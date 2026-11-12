@@ -1,0 +1,6 @@
+fsspec
+adlfs
+requests
+duckdb==1.3.2
+pytest
+ruff
