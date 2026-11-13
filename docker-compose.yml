@@ -1,0 +1,79 @@
+# Ambiente local do pipeline CNPJ.
+# Serviços: postgres (metadados do Airflow), azurite (emulador do Azure Blob) e airflow.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    # --skipApiVersionCheck: aceita versões de API mais novas que as do emulador.
+    command: azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck
+    ports:
+      - "127.0.0.1:10000:10000"
+    volumes:
+      - azurite_data:/data
+
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION:-3.0.6}
+    # standalone: scheduler, api-server, dag-processor e triggerer em um único container.
+    # Simples para o case; não é a topologia indicada para produção.
+    command: airflow standalone
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      # Com a máquina ocupada (dbt, DuckDB), importar o Airflow pode passar de 30 s.
+      AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
+      # Somente uso local: UI sem senha. Em produção usar um auth manager real.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+      PYTHONPATH: /opt/airflow/src
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-azurite}
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING}
+      SOURCE_CONTAINER: ${SOURCE_CONTAINER:-source-files}
+      # Origem dos dados. Vazio: usa o arquivo local em CNPJ_LOCAL_ZIP.
+      # Com URL, "{competencia}" é substituído por AAAA-MM.
+      CNPJ_SOURCE_URL: ${CNPJ_SOURCE_URL:-}
+      CNPJ_LOCAL_ZIP: ${CNPJ_LOCAL_ZIP:-/opt/airflow/data/Empresas0.zip}
+      # Warehouse DuckDB em volume Docker (mais rápido que pasta do Windows).
+      WAREHOUSE_PATH: ${WAREHOUSE_PATH:-/opt/airflow/warehouse/cnpj.duckdb}
+      TMP_DIR: ${TMP_DIR:-/opt/airflow/warehouse/tmp}
+      WAREHOUSE_MEMORY_LIMIT: ${WAREHOUSE_MEMORY_LIMIT:-3GB}
+      WAREHOUSE_THREADS: ${WAREHOUSE_THREADS:-2}
+      MAX_REJEITADAS_PCT: ${MAX_REJEITADAS_PCT:-0.1}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./tests:/opt/airflow/tests
+      - ./dbt:/opt/airflow/dbt
+      - ./pyproject.toml:/opt/airflow/pyproject.toml
+      - ./data:/opt/airflow/data
+      - warehouse_data:/opt/airflow/warehouse
+      - airflow_logs:/opt/airflow/logs
+
+volumes:
+  postgres_data:
+  azurite_data:
+  warehouse_data:
+  airflow_logs:
