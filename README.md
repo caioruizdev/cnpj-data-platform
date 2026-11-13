@@ -137,3 +137,69 @@ Os testes utilizam um ZIP sintético e um filesystem em memória. Cobrem extraç
 ```bash
 docker compose exec airflow python -m pytest tests/test_extract.py -v
 ```
+
+## Camada Bronze e controle operacional
+
+A camada Bronze recebe os registros do arquivo original armazenado no Azurite e os persiste no DuckDB, preservando os sete campos de origem como texto. A tipagem e as regras de negócio são aplicadas posteriormente pela camada Silver.
+
+### Estrutura e granularidade
+
+A tabela `bronze.empresas` representa os registros de empresas recebidos em cada competência. Sua granularidade é uma linha do arquivo de origem por competência.
+
+Os campos originais são:
+
+- `cnpj_basico`
+- `razao_social`
+- `natureza_juridica`
+- `qualificacao_responsavel`
+- `capital_social`
+- `porte_empresa`
+- `ente_federativo_responsavel`
+
+São acrescentados os metadados `_competencia`, `_arquivo`, `_sha256`, `_carregado_em` e `_run_id`, que permitem identificar a origem e a execução responsável pela carga.
+
+A Bronze não impõe unicidade de CNPJ básico. A consistência das chaves e os tratamentos dos domínios são avaliados nas transformações posteriores.
+
+### Processamento e codificação
+
+A carga verifica o checksum do ZIP armazenado, extrai o arquivo CSV e converte seu conteúdo de ISO-8859-1 para UTF-8 em blocos.
+
+O DuckDB lê os sete campos como `VARCHAR`, sem converter valores monetários ou códigos durante a ingestão.
+
+Os arquivos intermediários são mantidos em diretório temporário e removidos ao final da operação.
+
+### Idempotência e reprocessamento
+
+A carga é executada por competência, no formato `AAAA-MM`.
+
+Para reprocessar uma competência, os registros anteriores daquele mês são removidos e substituídos dentro de uma transação DuckDB. Em caso de falha durante a inserção ou reconciliação, a transação é revertida, preservando a carga anterior.
+
+Competências diferentes podem coexistir na Bronze.
+
+### Reconciliação e registros rejeitados
+
+O pipeline compara a quantidade de linhas do CSV com a quantidade efetivamente carregada.
+
+A leitura utiliza `ignore_errors=true` e aplica o limite configurável `MAX_REJEITADAS_PCT`, cujo padrão é `0.1`, correspondente a 0,1%.
+
+Se a diferença ultrapassar o limite permitido, a carga falha e a transação é revertida.
+
+A implementação registra a quantidade de linhas rejeitadas no resultado da carga, mas ainda não mantém uma tabela de quarentena com o conteúdo individual desses registros.
+
+### Controle operacional
+
+A tabela `ops.execucoes` registra o identificador da execução, a competência, a etapa, o status, os horários de início e término e uma mensagem de diagnóstico.
+
+Quando disponíveis, também são registrados a quantidade de linhas do arquivo, a quantidade carregada na Bronze e o checksum SHA-256.
+
+Falhas são registradas e suas exceções são propagadas para permitir que o orquestrador identifique a execução malsucedida.
+
+O histórico operacional é mantido separadamente da transação de carga da Bronze.
+
+### Testes da Bronze
+
+Os testes automatizados verificam carga e metadados, preservação de caracteres, idempotência, coexistência de competências, ausência da origem, corrupção do ZIP, rollback, registro de falhas e conversão de codificação.
+
+```bash
+docker compose exec airflow python -m pytest tests/test_bronze.py tests/test_controle.py tests/test_utf8.py -v
+```
