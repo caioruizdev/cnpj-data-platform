@@ -245,3 +245,117 @@ docker compose exec airflow /opt/dbt-venv/bin/dbt test --select tag:silver --ind
 A seleção cautelosa evita incluir testes que também dependam de modelos da Gold.
 
 A materialização da Silver é realizada pelo dbt e será integrada à execução orquestrada do pipeline.
+
+## Camada Gold e indicadores de negócio
+
+A camada Gold disponibiliza os dados tratados para análise das empresas do CNPJ. Os modelos são materializados pelo dbt no DuckDB e representam a competência selecionada para o processamento.
+
+### Modelagem dimensional
+
+A tabela `gold.fct_empresa` possui uma linha por CNPJ básico da competência processada. Ela contém a razão social, os códigos de natureza jurídica e porte, o capital social tipado e os indicadores de qualidade.
+
+As dimensões `gold.dim_natureza_juridica` e `gold.dim_porte` fornecem descrições para os códigos utilizados na tabela fato.
+
+Os dicionários de referência são carregados por seeds do dbt. Códigos de natureza jurídica ausentes na referência são identificados como `NÃO MAPEADA`, sem excluir as empresas das análises.
+
+A Gold representa a competência processada mais recentemente pelo dbt; não constitui, por si só, um histórico de snapshots mensais. O histórico de cargas por competência permanece disponível na Bronze.
+
+### Pergunta 1 — Naturezas jurídicas
+
+Quais naturezas jurídicas concentram mais empresas e qual o capital social total e médio de cada uma?
+
+O modelo `gold.mart_natureza_juridica` disponibiliza quantidade de empresas, participação percentual, capital social total, capital social médio e classificação por quantidade.
+
+```sql
+SELECT
+    natureza_juridica,
+    qtd_empresas,
+    pct_empresas,
+    capital_social_total,
+    capital_social_medio,
+    qtd_capital_suspeito
+FROM gold.mart_natureza_juridica
+ORDER BY qtd_empresas DESC;
+```
+
+A quantidade de empresas considera todos os registros da tabela fato. Os indicadores financeiros ajustados excluem os capitais sinalizados como suspeitos.
+
+O modelo também disponibiliza `capital_social_total_com_suspeitos`, permitindo comparar o total declarado com o total ajustado.
+
+### Pergunta 2 — Capital social por porte
+
+Como o capital social se distribui por porte e quais empresas apresentam os maiores capitais em cada grupo?
+
+O modelo `gold.mart_porte_distribuicao` apresenta quantidade de empresas, capital total, média, mediana, percentil 90, mínimo e máximo por porte empresarial.
+
+```sql
+SELECT
+    porte,
+    qtd_empresas,
+    capital_social_total,
+    capital_social_medio,
+    capital_social_mediano,
+    capital_social_p90,
+    capital_social_maximo
+FROM gold.mart_porte_distribuicao
+ORDER BY porte_codigo;
+```
+
+O modelo `gold.mart_top_empresas_por_porte` apresenta as dez maiores empresas elegíveis por capital social em cada porte, incluindo CNPJ básico, razão social e natureza jurídica.
+
+```sql
+SELECT
+    porte,
+    posicao,
+    cnpj_basico,
+    razao_social,
+    natureza_juridica,
+    capital_social
+FROM gold.mart_top_empresas_por_porte
+ORDER BY porte_codigo, posicao;
+```
+
+O ranking considera capitais positivos e não sinalizados como suspeitos. Em caso de empate, o menor CNPJ básico recebe a primeira posição.
+
+### Política de capital social
+
+A tabela fato preserva o capital social convertido e o indicador `capital_social_suspeito`.
+
+A sinalização considera valores-sentinela, padrões de preenchimento repetitivo e um limite heurístico para portes menores, conforme os parâmetros definidos em `dbt/dbt_project.yml`.
+
+Essas regras não constituem limites legais nem comprovam erro ou fraude cadastral. Sua finalidade é evitar que valores extremos potencialmente inconsistentes distorçam os indicadores ajustados.
+
+A política é provisória e deve ser reavaliada conforme a distribuição dos dados e a finalidade analítica. Valores elevados não sinalizados ainda podem influenciar significativamente os resultados.
+
+As médias financeiras consideram os registros com capital informado e elegível, incluindo capital igual a zero. Valores nulos não entram no cálculo da média.
+
+### Qualidade e reconciliação
+
+Os testes dbt verificam unicidade de chaves, relacionamentos entre fato e dimensões, preenchimento obrigatório, reconciliação de quantidade de empresas, reconciliação de capital social e consistência dos rankings.
+
+Na validação da competência 2026-10, foram observados três avisos de qualidade:
+
+- 1.119 empresas com capital social sinalizado como suspeito.
+- 4 códigos de natureza jurídica não mapeados.
+- 3 empresas com razão social ausente.
+
+Os avisos são mantidos visíveis e não impedem automaticamente a execução. A interpretação desses registros exige análise adicional.
+
+A reconciliação financeira compara os totais ajustados dos marts com a mesma população elegível da tabela fato, utilizando tipos decimais.
+
+### Limitações conhecidas
+
+- A Gold é reconstruída para a competência selecionada, sem preservar snapshots anteriores das tabelas analíticas.
+- A política de exclusão de capitais suspeitos é heurística e pode deixar valores extremos não sinalizados.
+- O dicionário de naturezas jurídicas pode não contemplar todos os códigos presentes na origem.
+- Os indicadores são calculados a partir do arquivo de empresas fornecido; outras bases do CNPJ não fazem parte do escopo.
+
+### Testes da Gold
+
+Os testes podem ser executados para as tabelas já materializadas:
+
+```bash
+docker compose exec airflow /opt/dbt-venv/bin/dbt test --select tag:gold --indirect-selection cautious --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt --vars '{"competencia":"2026-10"}'
+```
+
+Os avisos de qualidade devem ser analisados separadamente dos erros que impedem a validação.

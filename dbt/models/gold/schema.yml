@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: dim_natureza_juridica
+    description: >
+      Natureza jurídica (código de 4 dígitos). Descrições vêm de uma seed baseada na
+      tabela de Natureza Jurídica (CONCLA/IBGE). Códigos fora da seed ficam como 'NÃO MAPEADA'.
+    columns:
+      - name: codigo
+        data_tests:
+          - unique
+          - not_null
+
+  - name: dim_porte
+    columns:
+      - name: codigo
+        data_tests:
+          - unique
+          - not_null
+
+  - name: fct_empresa
+    description: Fato de empresas, uma linha por cnpj_basico na competência processada.
+    columns:
+      - name: cnpj_basico
+        data_tests:
+          - unique
+          - not_null
+      - name: natureza_juridica_codigo
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_natureza_juridica')
+                field: codigo
+      - name: porte_codigo
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_porte')
+                field: codigo
+
+  - name: mart_natureza_juridica
+    description: >
+      Pergunta 1. Quantidade de empresas, capital social total e médio por natureza jurídica.
+      Totais e médias excluem os capitais sinalizados como suspeitos pela política analítica.
+
+  - name: mart_porte_distribuicao
+    description: Pergunta 2. Distribuição do capital social por porte, excluindo capitais sinalizados como suspeitos.
+
+  - name: mart_top_empresas_por_porte
+    description: Pergunta 2. Empresas de maior capital social em cada porte, excluindo capitais sinalizados como suspeitos.
