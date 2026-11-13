@@ -35,3 +35,5 @@ Thumbs.db
 
 !dbt/seeds/*.csv
 dbt/logs/
+
+dbt/.user.yml

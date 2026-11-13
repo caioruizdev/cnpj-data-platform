@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_empresas
+    description: >
+      Silver. Empresas tipadas e limpas, uma linha por cnpj_basico na competência processada.
+      CPF na razão social é mascarado. Capital social convertido para decimal.
+    columns:
+      - name: cnpj_basico
+        description: Primeiros 8 dígitos do CNPJ (raiz).
+        data_tests:
+          - unique
+          - not_null
+      - name: natureza_juridica
+        data_tests:
+          - not_null
+      - name: porte_empresa
+        description: "00 não informado, 01 micro empresa, 03 empresa de pequeno porte, 05 demais."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["00", "01", "03", "05"]
+      - name: capital_social
+        description: Capital social em reais. Nulo quando o texto de origem é inválido ou vazio.

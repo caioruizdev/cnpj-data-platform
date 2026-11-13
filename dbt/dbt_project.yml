@@ -1,0 +1,44 @@
+name: cnpj
+version: "0.1.0"
+config-version: 2
+profile: cnpj
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+vars:
+  top_n_por_porte: 10
+  # Capital social igual ou acima deste valor é tratado como valor-sentinela (cadastro
+  # preenchido com 999.999.999.999,00) e fica fora de totais, médias e rankings.
+  capital_social_valor_sentinela: 999999999999
+  # Limiar heuristico de alerta (nao e limite legal do capital social).
+  # Valores sinalizados ficam preservados no fato, mas a politica atual dos marts
+  # os exclui dos indicadores ajustados ate validacao dos casos extremos.
+  # Revisar com analise da distribuicao e documentar o impacto da exclusao.
+  capital_social_limite_porte_pequeno: 1000000000
+
+models:
+  cnpj:
+    silver:
+      +materialized: table
+      +schema: silver
+      +tags: [silver]
+    gold:
+      +materialized: table
+      +schema: gold
+      +tags: [gold]
+
+seeds:
+  cnpj:
+    +schema: silver
+    +tags: [gold]  # referência usada pelas dimensões
+    natureza_juridica:
+      +column_types:
+        codigo: varchar
+        descricao: varchar
+    porte_empresa:
+      +column_types:
+        codigo: varchar
+        descricao: varchar

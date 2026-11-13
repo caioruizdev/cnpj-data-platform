@@ -1,0 +1,11 @@
+# Sem credenciais: o warehouse local é um arquivo DuckDB.
+cnpj:
+  target: duckdb
+  outputs:
+    duckdb:
+      type: duckdb
+      path: "{{ env_var('WAREHOUSE_PATH', '/opt/airflow/warehouse/cnpj.duckdb') }}"
+      threads: 2
+      settings:
+        threads: 2  # limita o paralelismo interno do DuckDB
+        memory_limit: "{{ env_var('WAREHOUSE_MEMORY_LIMIT', '3GB') }}"

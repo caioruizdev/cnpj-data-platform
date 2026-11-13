@@ -203,3 +203,45 @@ Os testes automatizados verificam carga e metadados, preservação de caracteres
 ```bash
 docker compose exec airflow python -m pytest tests/test_bronze.py tests/test_controle.py tests/test_utf8.py -v
 ```
+
+## Camada Silver
+
+A camada Silver transforma os registros da Bronze em dados tipados e padronizados, utilizando o dbt com DuckDB.
+
+### Granularidade e competência
+
+O modelo `silver.stg_empresas` contém uma linha por CNPJ básico na competência processada.
+
+A competência pode ser informada pela variável `competencia` do dbt. Na ausência desse parâmetro, a macro utiliza a competência mais recente encontrada na Bronze.
+
+Quando existem registros repetidos para um CNPJ básico, o modelo mantém o registro com `_carregado_em` mais recente. A presença de duplicidades na origem é monitorada por teste de qualidade.
+
+### Tratamentos aplicados
+
+- Padronização do CNPJ básico para oito caracteres.
+- Remoção de espaços e padronização de códigos.
+- Conversão do capital social para `DECIMAL(20,2)`, considerando a vírgula decimal da origem.
+- Identificação de valores de capital social que não podem ser convertidos.
+- Padronização do porte empresarial, utilizando `00` para valores não informados.
+- Tratamento de razão social vazia.
+- Mascaramento de sequências identificadas como CPF na razão social.
+
+O capital social inválido permanece nulo na coluna tipada e é identificado pelo indicador `capital_social_invalido`. Os valores originais permanecem disponíveis na Bronze.
+
+### Qualidade dos dados
+
+A Silver possui verificações de unicidade e preenchimento do CNPJ básico, preenchimento da natureza jurídica e do porte, códigos de porte aceitos e reconciliação com a Bronze.
+
+A validação de duplicidades na origem é classificada como aviso, permitindo identificar ocorrências sem interromper automaticamente a transformação.
+
+### Execução dos testes
+
+Para executar somente os testes da Silver da competência de outubro de 2026:
+
+```bash
+docker compose exec airflow /opt/dbt-venv/bin/dbt test --select tag:silver --indirect-selection cautious --project-dir /opt/airflow/dbt --profiles-dir /opt/airflow/dbt --vars '{"competencia":"2026-10"}'
+```
+
+A seleção cautelosa evita incluir testes que também dependam de modelos da Gold.
+
+A materialização da Silver é realizada pelo dbt e será integrada à execução orquestrada do pipeline.
