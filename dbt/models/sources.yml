@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: Dados como vieram da Receita Federal, tudo texto, com metadados de linhagem.
+    tables:
+      - name: empresas
+        description: Conteúdo do Empresas0.zip, uma linha por empresa (matriz) e competência.
+        columns:
+          - name: cnpj_basico
+            data_tests:
+              - not_null
+          - name: _competencia
+            data_tests:
+              - not_null
