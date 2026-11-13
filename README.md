@@ -4,6 +4,39 @@ Plataforma de dados para processamento e análise da base pública de empresas d
 
 A solução organiza os dados em camadas Bronze, Silver e Gold, com orquestração pelo Apache Airflow, transformações pelo dbt e armazenamento analítico em DuckDB.
 
+## Início rápido
+
+Este projeto pode ser executado localmente com Docker Compose, sem instalar Python, dbt ou Airflow na máquina.
+
+1. Clone o repositório e entre no diretório do projeto.
+2. Copie `.env.example` para `.env`.
+3. Obtenha o arquivo `Empresas0.zip` da competência desejada na base pública do CNPJ da Receita Federal e salve-o em `data/Empresas0.zip`.
+4. Execute os comandos abaixo:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+5. Acesse o Airflow em http://localhost:8080.
+6. Localize a DAG `cnpj_empresas` e dispare uma execução manual com:
+
+```json
+{
+  "competencia": "2026-10",
+  "forcar_extracao": false
+}
+```
+
+Substitua `2026-10` pela competência correspondente ao arquivo utilizado.
+
+A execução percorre a extração, a Bronze, a Silver e a Gold. Os resultados analíticos ficam disponíveis nas tabelas `gold.mart_natureza_juridica`, `gold.mart_porte_distribuicao` e `gold.mart_top_empresas_por_porte`.
+
+**Fonte alternativa:** é possível configurar `CNPJ_SOURCE_URL` no `.env` para utilizar uma origem HTTP. O projeto não fornece uma URL remota previamente validada, portanto essa configuração exige uma URL compatível com a publicação do arquivo.
+
+**Observação:** a execução completa já foi validada localmente com a competência 2026-10, mas ainda não foi reproduzida integralmente em um ambiente novo.
+
 ## Arquitetura
 
 O ambiente utiliza Docker Compose para executar os serviços necessários ao pipeline:
@@ -17,6 +50,24 @@ O ambiente utiliza Docker Compose para executar os serviços necessários ao pip
 | dbt | Transformações e testes das camadas Silver e Gold |
 
 A infraestrutura foi projetada para execução local, sem dependência de serviços pagos.
+
+### Fluxo de dados
+
+```mermaid
+flowchart TD
+    A["Receita Federal / Empresas0.zip"] --> B["Extração Python"]
+    B --> C["Azurite / Azure Blob"]
+    C --> D["Bronze - DuckDB"]
+    D --> E["Silver - dbt"]
+    E --> F["Gold - dbt"]
+    F --> G["Dimensões e tabela fato"]
+    G --> H["Marts e consultas analíticas"]
+    I["Apache Airflow"] -.-> B
+    I -.-> D
+    I -.-> E
+    I -.-> F
+    J["PostgreSQL"] -.-> I
+```
 
 ## Pré-requisitos
 
@@ -502,3 +553,9 @@ O ambiente foi configurado para facilitar a reprodução do projeto, mas a const
 A execução com a base completa demanda espaço em disco e memória consideráveis. Em ambientes com poucos recursos, a carga pode ser significativamente mais lenta ou exigir ajustes de capacidade.
 
 O Codespaces não inicia automaticamente os serviços do pipeline. Isso permite que o avaliador revise as configurações antes de executar o Docker Compose.
+
+## Uso de inteligência artificial
+
+Ferramentas de inteligência artificial, como o ChatGPT, foram utilizadas como apoio ao desenvolvimento, principalmente para acelerar a configuração da infraestrutura, explorar alternativas de implementação, otimizar consultas SQL e rotinas de processamento, auxiliar na criação e revisão de testes automatizados e apoiar a investigação e resolução de problemas técnicos.
+
+A utilização dessas ferramentas foi integrada ao fluxo de desenvolvimento, com execução prática, validação de resultados, análise de erros e refinamento das implementações.
