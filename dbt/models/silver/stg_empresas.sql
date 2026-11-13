@@ -15,7 +15,18 @@ with origem as (
         _carregado_em,
         row_number() over (
             partition by lpad(trim(cnpj_basico), 8, '0')
-            order by _carregado_em desc
+            order by
+                _carregado_em desc nulls last,
+                _run_id desc nulls last,
+                _sha256 desc nulls last,
+                _arquivo desc nulls last,
+                razao_social desc nulls last,
+                natureza_juridica desc nulls last,
+                qualificacao_responsavel desc nulls last,
+                capital_social desc nulls last,
+                porte_empresa desc nulls last,
+                ente_federativo_responsavel desc nulls last,
+                cnpj_basico desc nulls last
         ) as _ordem
     from {{ source('bronze', 'empresas') }}
     where _competencia = {{ competencia_alvo() }}

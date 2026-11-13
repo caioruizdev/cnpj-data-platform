@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Instalar dependências de teste
-        run: pip install fsspec adlfs requests duckdb==1.3.2 pytest ruff
+        run: pip install -r docker/airflow/requirements.txt
       - name: Lint
         run: ruff check src tests dags/cnpj_empresas.py
       - name: Testes

@@ -31,6 +31,8 @@ def _executar_dbt(selecao: str, competencia: str) -> None:
         "build",
         "--select",
         selecao,
+        "--indirect-selection",
+        "buildable",
         "--project-dir",
         DBT_DIR,
         "--profiles-dir",

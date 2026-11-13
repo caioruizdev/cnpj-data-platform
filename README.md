@@ -295,7 +295,9 @@ docker compose exec airflow /opt/dbt-venv/bin/dbt test --select tag:silver --ind
 
 A seleção cautelosa evita incluir testes que também dependam de modelos da Gold.
 
-A materialização da Silver é realizada pelo dbt e será integrada à execução orquestrada do pipeline.
+A materialização da Silver já está integrada à DAG do Airflow. O pipeline executa a Silver antes da Gold, utilizando dbt build e seleção indireta buildable para evitar testes de modelos ainda não construídos.
+
+Em uma validação manual, a primeira construção das camadas Silver e Gold foi executada em um DuckDB isolado, com três empresas sintéticas. O teste confirmou a criação de uma tabela Silver, duas seeds, seis modelos Gold e a execução de 25 testes dbt sem erros ou avisos. A ingestão do arquivo real não faz parte desse teste isolado.
 
 ## Camada Gold e indicadores de negócio
 
