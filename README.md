@@ -359,3 +359,55 @@ docker compose exec airflow /opt/dbt-venv/bin/dbt test --select tag:gold --indir
 ```
 
 Os avisos de qualidade devem ser analisados separadamente dos erros que impedem a validação.
+
+## Orquestração com Apache Airflow
+
+O pipeline é orquestrado pela DAG `cnpj_empresas`, implementada em `dags/cnpj_empresas.py`.
+
+O fluxo é composto por seis tarefas sequenciais:
+
+1. `definir_competencia`: determina a competência AAAA-MM solicitada.
+2. `aguardar_publicacao`: verifica se o arquivo está disponível na origem.
+3. `extrair_zip`: disponibiliza o ZIP no armazenamento e registra a execução.
+4. `carregar_bronze`: carrega os dados brutos e registra as métricas da etapa.
+5. `dbt_silver`: executa os modelos e testes da camada Silver.
+6. `dbt_gold`: executa as seeds, os modelos e os testes da camada Gold.
+
+### Agendamento e reprocessamento
+
+Com `CNPJ_SOURCE_URL` configurada, a DAG utiliza o agendamento mensal `0 6 12 * *` e aguarda a publicação do arquivo.
+
+Sem URL configurada, o processamento utiliza o ZIP local informado em `CNPJ_LOCAL_ZIP` e o agendamento automático fica desabilitado. Nesse modo, é necessário fornecer a competência ao disparar a execução.
+
+Os parâmetros da DAG são:
+
+- `competencia`: competência AAAA-MM para processamento ou reprocessamento.
+- `forcar_extracao`: solicita uma nova extração do arquivo.
+
+A DAG permite uma execução ativa por vez, não executa automaticamente competências históricas e configura três tentativas para falhas transitórias, com intervalo de cinco minutos.
+
+A Bronze pode ser recarregada por competência, enquanto os modelos Silver e Gold são reconstruídos para a competência selecionada. As etapas possuem registros operacionais de sucesso ou falha.
+
+### Execução e acompanhamento
+
+Após iniciar o ambiente com Docker Compose, acesse a interface do Airflow em:
+
+http://localhost:8080
+
+Selecione a DAG `cnpj_empresas` e utilize a opção de disparo manual com os parâmetros:
+
+```json
+{
+  "competencia": "2026-10",
+  "forcar_extracao": false
+}
+```
+
+O processamento completo foi validado na competência 2026-10, com as seis tarefas concluídas com sucesso.
+
+### Limitações da orquestração
+
+- O Airflow utiliza o modo `standalone`, adequado à demonstração local, mas não recomendado como topologia de produção.
+- A disponibilidade remota depende da configuração de uma URL válida para a fonte de dados.
+- O reprocessamento recompõe as tabelas analíticas da competência escolhida; não mantém snapshots históricos da Silver e Gold.
+- O controle de execução e as retentativas não substituem observabilidade, alertas e políticas operacionais de produção.
