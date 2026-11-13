@@ -1,0 +1,16 @@
+[project]
+name = "cnpj-pipeline"
+version = "0.1.0"
+description = "Pipeline ELT do CNPJ (Empresas0) - case técnico"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "dags"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

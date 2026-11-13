@@ -97,3 +97,43 @@ O projeto também disponibiliza um `Makefile` com atalhos para ambientes com GNU
 O código está organizado por responsabilidades, separando infraestrutura, ingestão, transformação, orquestração e testes.
 
 As regras de negócio, os procedimentos de reprocessamento, as decisões técnicas e as limitações serão detalhados nas seções correspondentes ao pipeline.
+
+## Origem e extração dos dados
+
+A fonte utilizada é o arquivo `Empresas0.zip` da base pública do CNPJ da Receita Federal. O pipeline aceita uma origem local ou uma URL configurada por variável de ambiente.
+
+### Configuração da origem
+
+Na execução local, o arquivo deve estar disponível em `data/Empresas0.zip`. Esse diretório é montado no container em `/opt/airflow/data`.
+
+A variável `CNPJ_LOCAL_ZIP` define o caminho do arquivo dentro do container. Alternativamente, `CNPJ_SOURCE_URL` permite configurar uma origem HTTP, com substituição do marcador `{competencia}` pelo mês de referência no formato `AAAA-MM`.
+
+O arquivo de origem não é versionado no repositório.
+
+### Armazenamento e rastreabilidade
+
+A extração utiliza `fsspec` e `adlfs` para armazenar o ZIP no Azurite, em um caminho organizado por competência:
+
+`source-files/cnpj/competencia=AAAA-MM/Empresas0.zip`
+
+Um arquivo `.sha256` é gravado ao término da transferência, permitindo identificar a versão armazenada e verificar sua integridade antes do reaproveitamento.
+
+A transferência ocorre em blocos de 8 MB, sem necessidade de carregar o ZIP completo na memória. Para origens HTTP, são configuradas novas tentativas em falhas transitórias.
+
+### Reexecução e falhas
+
+Quando o arquivo e seu checksum já existem, a extração confere o SHA-256 do conteúdo armazenado antes de reutilizá-lo.
+
+O parâmetro `force=True` permite realizar uma nova extração. Em caso de erro durante a transferência, o arquivo parcial é removido e o checksum anterior não é mantido.
+
+A substituição forçada não é atômica: uma falha pode deixar a competência temporariamente sem o arquivo armazenado. Para cargas que exigem continuidade de leitura durante substituições, uma evolução possível é utilizar um caminho temporário e publicar o novo objeto após sua validação.
+
+O SHA-256 verifica a consistência entre o conteúdo recebido e o armazenado; não comprova, isoladamente, a integridade ou a procedência da publicação na origem.
+
+### Testes da extração
+
+Os testes utilizam um ZIP sintético e um filesystem em memória. Cobrem extração local, cálculo de checksum, reaproveitamento, substituição forçada, origem ausente, competência inválida, conteúdo inválido e detecção de corrupção.
+
+```bash
+docker compose exec airflow python -m pytest tests/test_extract.py -v
+```
