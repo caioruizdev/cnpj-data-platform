@@ -411,3 +411,46 @@ O processamento completo foi validado na competência 2026-10, com as seis taref
 - A disponibilidade remota depende da configuração de uma URL válida para a fonte de dados.
 - O reprocessamento recompõe as tabelas analíticas da competência escolhida; não mantém snapshots históricos da Silver e Gold.
 - O controle de execução e as retentativas não substituem observabilidade, alertas e políticas operacionais de produção.
+
+## Testes automatizados e integração contínua
+
+O projeto utiliza pytest para testar a lógica Python e Ruff para análise estática do código.
+
+### Cobertura dos testes Python
+
+Os testes incluem:
+
+- Validação e resolução da competência de processamento.
+- Configuração da origem e do armazenamento.
+- Leitura, escrita e verificação de arquivos no armazenamento.
+- Extração e integridade dos arquivos.
+- Carregamento Bronze e tratamento de registros.
+- Controle operacional de execução.
+- Normalização de caracteres e tratamento de texto.
+
+Os testes utilizam dados sintéticos e armazenamento em memória quando aplicável, evitando depender do ZIP completo da Receita Federal ou de credenciais reais.
+
+### Execução local
+
+Com os containers em funcionamento, execute:
+
+```bash
+docker compose exec airflow python -m ruff check /opt/airflow/src /opt/airflow/tests /opt/airflow/dags/cnpj_empresas.py
+docker compose exec airflow sh -lc 'cd /opt/airflow && python -m pytest tests -q'
+```
+
+### Integração contínua
+
+O workflow `.github/workflows/ci.yml` executa automaticamente as seguintes verificações em pushes e Pull Requests:
+
+1. Checkout do repositório.
+2. Preparação do Python 3.12.
+3. Instalação das dependências necessárias para os testes.
+4. Análise estática com Ruff.
+5. Execução da suíte Python com pytest.
+
+O CI verifica a lógica Python sem utilizar o conjunto completo de dados. As transformações e os testes dbt sobre a base real são validados separadamente no ambiente Docker.
+
+### Limitações dos testes
+
+A suíte Python não substitui testes integrados de ponta a ponta com os serviços Docker. O workflow também não executa uma carga integral dos dados públicos, devido ao volume do arquivo e ao custo de processamento.
