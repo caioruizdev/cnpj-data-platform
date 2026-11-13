@@ -454,3 +454,51 @@ O CI verifica a lógica Python sem utilizar o conjunto completo de dados. As tra
 ### Limitações dos testes
 
 A suíte Python não substitui testes integrados de ponta a ponta com os serviços Docker. O workflow também não executa uma carga integral dos dados públicos, devido ao volume do arquivo e ao custo de processamento.
+
+## Desenvolvimento com GitHub Codespaces
+
+O repositório inclui `.devcontainer/devcontainer.json`, que configura um ambiente Ubuntu com Docker-in-Docker e encaminhamento da porta 8080 para a interface do Airflow.
+
+### Como utilizar
+
+1. No GitHub, abra o repositório e selecione **Code > Codespaces > Create codespace on main**.
+2. No terminal do Codespaces, confira se o Docker está disponível:
+
+   ```bash
+   docker --version
+   docker compose version
+   ```
+
+3. Confira as variáveis no arquivo `.env`, criado a partir de `.env.example` na inicialização do ambiente.
+4. Inicie os serviços:
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+5. Aguarde os serviços iniciarem e acompanhe a execução com:
+
+   ```bash
+   docker compose ps
+   docker compose logs -f airflow
+   ```
+
+6. Abra a porta encaminhada 8080 para acessar a interface do Airflow.
+
+### Fonte de dados no Codespaces
+
+O arquivo `Empresas0.zip` não faz parte do repositório devido ao seu tamanho.
+
+Para executar o processamento com arquivo local, disponibilize o ZIP em `data/Empresas0.zip` e informe a competência no disparo manual da DAG.
+
+Como alternativa, configure `CNPJ_SOURCE_URL` com uma URL válida para a origem. A URL deve apontar para o arquivo esperado pela implementação da extração.
+
+Não inclua credenciais, arquivos `.env` com informações privadas ou o ZIP de origem nos commits.
+
+### Considerações
+
+O ambiente foi configurado para facilitar a reprodução do projeto, mas a construção completa dentro de um Codespace ainda não foi validada.
+
+A execução com a base completa demanda espaço em disco e memória consideráveis. Em ambientes com poucos recursos, a carga pode ser significativamente mais lenta ou exigir ajustes de capacidade.
+
+O Codespaces não inicia automaticamente os serviços do pipeline. Isso permite que o avaliador revise as configurações antes de executar o Docker Compose.

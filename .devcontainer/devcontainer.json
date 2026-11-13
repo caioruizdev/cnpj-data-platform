@@ -1,0 +1,12 @@
+{
+  "name": "cnpj-elt-case",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "cp -n .env.example .env || true",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": { "label": "Airflow UI" }
+  }
+}
